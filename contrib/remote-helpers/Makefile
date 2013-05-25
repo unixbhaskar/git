@@ -5,6 +5,7 @@ export T := $(addprefix $(CURDIR)/,$(TESTS))
 export MAKE := $(MAKE) -e
 export PATH := $(CURDIR):$(PATH)
 export TEST_LINT := test-lint-executable test-lint-shell-syntax
+export TEST_DIRECTORY := $(CURDIR)/../../t
 
 export SCRIPT_PYTHON := $(addprefix $(CURDIR)/,$(SCRIPTS))
 
