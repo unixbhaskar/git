@@ -1,9 +1,9 @@
 TESTS := $(wildcard test-*.t)
 SCRIPTS := $(wildcard git-remote-*.py)
+LINKS := $(addprefix ../../,$(patsubst %.py,%,$(SCRIPTS)))
 
 export T := $(addprefix $(CURDIR)/,$(TESTS))
 export MAKE := $(MAKE) -e
-export PATH := $(CURDIR):$(PATH)
 export TEST_LINT := test-lint-executable test-lint-shell-syntax
 export TEST_DIRECTORY := $(CURDIR)/../../t
 
@@ -15,10 +15,15 @@ all: $(SCRIPTS)
 install:
 	$(MAKE) -C ../.. install-python-script
 
-test: all
+links: all $(LINKS)
+
+test: links
 	$(MAKE) -C ../../t $@
 
-$(TESTS): all
+$(LINKS):
+	ln -sf contrib/remote-helpers/$(notdir $@) ../..
+
+$(TESTS): links
 	$(MAKE) -C ../../t $(CURDIR)/$@
 
-.PHONY: all install test $(TESTS)
+.PHONY: all install test links $(TESTS)
