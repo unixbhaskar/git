@@ -1,4 +1,4 @@
-TESTS := $(wildcard test*.sh)
+TESTS := $(wildcard test-*.t)
 SCRIPTS := $(wildcard git-remote-*.py)
 
 export T := $(addprefix $(CURDIR)/,$(TESTS))
