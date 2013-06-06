@@ -118,6 +118,7 @@ static void parse_args(int argc, const char **argv, struct replay_opts *opts)
 		OPT_END(),
 		OPT_END(),
 		OPT_END(),
+		OPT_END(),
 	};
 
 	if (opts->action == REPLAY_PICK) {
@@ -127,6 +128,7 @@ static void parse_args(int argc, const char **argv, struct replay_opts *opts)
 			OPT_BOOLEAN(0, "allow-empty", &opts->allow_empty, N_("preserve initially empty commits")),
 			OPT_BOOLEAN(0, "allow-empty-message", &opts->allow_empty_message, N_("allow commits with empty messages")),
 			OPT_BOOLEAN(0, "keep-redundant-commits", &opts->keep_redundant_commits, N_("keep redundant, empty commits")),
+			OPT_BOOLEAN(0, "skip-empty", &opts->skip_empty, N_("skip empty commits")),
 			OPT_END(),
 		};
 		if (parse_options_concat(options, ARRAY_SIZE(options), cp_extra))
@@ -142,6 +144,12 @@ static void parse_args(int argc, const char **argv, struct replay_opts *opts)
 				"--quit", remove_state,
 				"--continue", contin,
 				"--abort", rollback,
+				NULL);
+
+	verify_opt_mutually_compatible(me,
+				"--allow-empty", opts->allow_empty,
+				"--skip-empty", opts->skip_empty,
+				"--keep-redundant-commits", opts->keep_redundant_commits,
 				NULL);
 
 	/* implies allow_empty */
