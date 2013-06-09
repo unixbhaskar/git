@@ -60,13 +60,13 @@ test_expect_success '"upstream" does not push on unconfigured branch' '
 	test_push_failure upstream
 '
 
-test_expect_success '"upstream" does not push when remotes do not match' '
+test_expect_success '"upstream" pushes when remotes do not match' '
 	git checkout master &&
 	test_config branch.master.remote parent1 &&
 	test_config branch.master.merge refs/heads/foo &&
 	test_config push.default upstream &&
 	test_commit five &&
-	test_must_fail git push parent2
+	git push parent2
 '
 
 test_expect_success 'push from/to new branch with upstream, matching and simple' '
