@@ -39,6 +39,19 @@ test_push_failure () {
 	test_cmp expect actual
 }
 
+# $1 = push.default value
+# $2 = branch.master.merge value (master or foo)
+# $3 = branch to check for actual output (master or foo)
+test_pushdefault_with_mode () {
+test_expect_success "push.default = $1 works with remote.pushdefault" "
+	test_config branch.master.remote parent1 &&
+	test_config branch.master.merge refs/heads/$2 &&
+	test_config remote.pushdefault parent2 &&
+	test_commit commit-for-$1 &&
+	test_push_success $1 $3 repo2
+"
+}
+
 test_expect_success '"upstream" pushes to configured upstream' '
 	git checkout master &&
 	test_config branch.master.remote parent1 &&
@@ -114,5 +127,10 @@ test_expect_success 'push to existing branch, upstream configured with different
 	git --git-dir=repo1 log -1 --format="%h %s" "other-name" >actual-other-name &&
 	test_cmp expect-other-name actual-other-name
 '
+
+test_pushdefault_with_mode "matching" "foo" "master"
+test_pushdefault_with_mode "upstream" "foo" "foo"
+test_pushdefault_with_mode "simple" "master" "master"
+test_pushdefault_with_mode "current" "foo" "master"
 
 test_done
