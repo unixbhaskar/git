@@ -136,11 +136,6 @@ static void setup_push_upstream(struct remote *remote, int simple)
 	if (branch->merge_nr != 1)
 		die(_("The current branch %s has multiple upstream branches, "
 		    "refusing to push."), branch->name);
-	if (strcmp(branch->remote_name, remote->name))
-		die(_("You are pushing to remote '%s', which is not the upstream of\n"
-		      "your current branch '%s', without telling me what to push\n"
-		      "to update which remote branch."),
-		    remote->name, branch->name);
 	if (simple && strcmp(branch->refname, branch->merge[0]->src))
 		die_push_simple(branch, remote);
 

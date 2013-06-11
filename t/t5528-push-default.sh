@@ -15,17 +15,19 @@ test_expect_success 'setup bare remotes' '
 
 # $1 = local revision
 # $2 = remote revision (tested to be equal to the local one)
+# $3 = [optional] repo to check for actual output (repo1 by default)
 check_pushed_commit () {
 	git log -1 --format='%h %s' "$1" >expect &&
-	git --git-dir=repo1 log -1 --format='%h %s' "$2" >actual &&
+	git --git-dir="${3:-repo1}" log -1 --format='%h %s' "$2" >actual &&
 	test_cmp expect actual
 }
 
 # $1 = push.default value
 # $2 = expected target branch for the push
+# $3 = [optional] repo to check for actual output (repo1 by default)
 test_push_success () {
 	git -c push.default="$1" push &&
-	check_pushed_commit HEAD "$2"
+	check_pushed_commit HEAD "$2" "$3"
 }
 
 # $1 = push.default value
@@ -35,6 +37,19 @@ test_push_failure () {
 	test_must_fail git -c push.default="$1" push &&
 	git --git-dir=repo1 log --no-walk --format='%h %s' --all >actual &&
 	test_cmp expect actual
+}
+
+# $1 = push.default value
+# $2 = branch.master.merge value (master or foo)
+# $3 = branch to check for actual output (master or foo)
+test_pushdefault_with_mode () {
+test_expect_success "push.default = $1 works with remote.pushdefault" "
+	test_config branch.master.remote parent1 &&
+	test_config branch.master.merge refs/heads/$2 &&
+	test_config remote.pushdefault parent2 &&
+	test_commit commit-for-$1 &&
+	test_push_success $1 $3 repo2
+"
 }
 
 test_expect_success '"upstream" pushes to configured upstream' '
@@ -48,7 +63,6 @@ test_expect_success '"upstream" pushes to configured upstream' '
 test_expect_success '"upstream" does not push on unconfigured remote' '
 	git checkout master &&
 	test_unconfig branch.master.remote &&
-	test_config push.default upstream &&
 	test_commit three &&
 	test_push_failure upstream
 '
@@ -57,18 +71,17 @@ test_expect_success '"upstream" does not push on unconfigured branch' '
 	git checkout master &&
 	test_config branch.master.remote parent1 &&
 	test_unconfig branch.master.merge &&
-	test_config push.default upstream
 	test_commit four &&
 	test_push_failure upstream
 '
 
-test_expect_success '"upstream" does not push when remotes do not match' '
+test_expect_success '"upstream" pushes when remotes do not match' '
 	git checkout master &&
 	test_config branch.master.remote parent1 &&
 	test_config branch.master.merge refs/heads/foo &&
 	test_config push.default upstream &&
 	test_commit five &&
-	test_must_fail git push parent2
+	git push parent2
 '
 
 test_expect_success 'push from/to new branch with upstream, matching and simple' '
@@ -114,5 +127,10 @@ test_expect_success 'push to existing branch, upstream configured with different
 	git --git-dir=repo1 log -1 --format="%h %s" "other-name" >actual-other-name &&
 	test_cmp expect-other-name actual-other-name
 '
+
+test_pushdefault_with_mode "matching" "foo" "master"
+test_pushdefault_with_mode "upstream" "foo" "foo"
+test_pushdefault_with_mode "simple" "master" "master"
+test_pushdefault_with_mode "current" "foo" "master"
 
 test_done
