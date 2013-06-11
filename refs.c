@@ -1252,6 +1252,15 @@ const char *resolve_ref_unsafe(const char *refname, unsigned char *sha1, int rea
 
 		git_snpath(path, sizeof(path), "%s", refname);
 
+		/*
+		 * This loop is to avoid race conditions.  First we
+		 * lstat() the file, then we try to read it as a link
+		 * or as a file.  But if somebody changes the type of
+		 * the file (file <-> directory <-> symlink) between
+		 * the lstat() and reading, then we don't want to
+		 * report that as an error but rather try again
+		 * starting with the lstat().
+		 */
 		for (;;) {
 			if (lstat(path, &st) < 0) {
 				if (errno == ENOENT)
@@ -1265,8 +1274,13 @@ const char *resolve_ref_unsafe(const char *refname, unsigned char *sha1, int rea
 			/* Follow "normalized" - ie "refs/.." symlinks by hand */
 			if (S_ISLNK(st.st_mode)) {
 				len = readlink(path, buffer, sizeof(buffer)-1);
-				if (len < 0)
-					return NULL;
+				if (len < 0) {
+					if (errno == ENOENT || errno == EINVAL)
+						/* inconsistent with lstat; retry */
+						continue;
+					else
+						return NULL;
+				}
 				buffer[len] = 0;
 				if (!prefixcmp(buffer, "refs/") &&
 				    !check_refname_format(buffer, 0)) {
@@ -1289,8 +1303,13 @@ const char *resolve_ref_unsafe(const char *refname, unsigned char *sha1, int rea
 			 * a ref
 			 */
 			fd = open(path, O_RDONLY);
-			if (fd < 0)
-				return NULL;
+			if (fd < 0) {
+				if (errno == ENOENT)
+					/* inconsistent with lstat; retry */
+					continue;
+				else
+					return NULL;
+			}
 			len = read_in_full(fd, buffer, sizeof(buffer)-1);
 			close(fd);
 			if (len < 0)
