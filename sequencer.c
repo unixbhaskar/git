@@ -20,6 +20,18 @@
 const char sign_off_header[] = "Signed-off-by: ";
 static const char cherry_picked_prefix[] = "(cherry picked from commit ";
 
+struct rewritten_list_item {
+	unsigned char from[20];
+	unsigned char to[20];
+};
+
+struct rewritten_list {
+	struct rewritten_list_item *items;
+	unsigned int nr, alloc;
+};
+
+static struct rewritten_list rewritten;
+
 static int is_rfc2822_line(const char *buf, int len)
 {
 	int i;
@@ -100,6 +112,50 @@ static int has_conforming_footer(struct strbuf *sb, struct strbuf *sob,
 	if (found_sob)
 		return 2;
 	return 1;
+}
+
+static void add_rewritten(unsigned char *from, unsigned char *to)
+{
+	struct rewritten_list_item *item;
+	if (rewritten.nr + 1 >= rewritten.alloc) {
+		rewritten.alloc += 32;
+		rewritten.items = xrealloc(rewritten.items, rewritten.alloc * sizeof(*rewritten.items));
+	}
+	item = &rewritten.items[rewritten.nr];
+	hashcpy(item->from, from);
+	hashcpy(item->to, to);
+	rewritten.nr++;
+}
+
+static void run_rewrite_hook(const char *name)
+{
+	struct strbuf buf = STRBUF_INIT;
+	struct child_process proc;
+	const char *argv[3];
+	int code, i;
+
+	argv[0] = find_hook("post-rewrite");
+	if (!argv[0])
+		return;
+
+	argv[1] = name;
+	argv[2] = NULL;
+
+	memset(&proc, 0, sizeof(proc));
+	proc.argv = argv;
+	proc.in = -1;
+	proc.stdout_to_stderr = 1;
+
+	code = start_command(&proc);
+	if (code)
+		return;
+	for (i = 0; i < rewritten.nr; i++) {
+		struct rewritten_list_item *item = &rewritten.items[i];
+		strbuf_addf(&buf, "%s %s\n", sha1_to_hex(item->from), sha1_to_hex(item->to));
+	}
+	write_in_full(proc.in, buf.buf, buf.len);
+	close(proc.in);
+	finish_command(&proc);
 }
 
 static void remove_sequencer_state(void)
@@ -474,7 +530,7 @@ static int do_pick_commit(struct commit *commit, struct replay_opts *opts)
 	struct commit_message msg = { NULL, NULL, NULL, NULL, NULL };
 	char *defmsg = NULL;
 	struct strbuf msgbuf = STRBUF_INIT;
-	int res, unborn = 0;
+	int res, unborn = 0, allow;
 
 	if (opts->no_commit) {
 		/*
@@ -624,14 +680,32 @@ static int do_pick_commit(struct commit *commit, struct replay_opts *opts)
 		      msg.subject);
 		print_advice(res == 1, opts);
 		rerere(opts->allow_rerere_auto);
-	} else {
-		int allow = allow_empty(opts, commit);
-		if (allow < 0)
-			return allow;
-		if (!opts->no_commit)
-			res = run_git_commit(defmsg, opts, allow);
+		goto leave;
 	}
 
+	if (opts->skip_empty && is_index_unchanged() == 1) {
+		warning(_("skipping %s... %s"),
+			find_unique_abbrev(commit->object.sha1, DEFAULT_ABBREV),
+			msg.subject);
+		goto leave;
+	}
+	allow = allow_empty(opts, commit);
+	if (allow < 0) {
+		res = allow;
+		goto leave;
+	}
+	if (!opts->no_commit)
+		res = run_git_commit(defmsg, opts, allow);
+
+	if (!res && opts->action == REPLAY_PICK) {
+		unsigned char to[20];
+
+		if (read_ref("HEAD", to))
+			goto leave;
+
+		add_rewritten(commit->object.sha1, to);
+	}
+leave:
 	free_message(&msg);
 	free(defmsg);
 
@@ -774,6 +848,40 @@ static void read_populate_todo(struct commit_list **todo_list,
 	strbuf_release(&buf);
 	if (res)
 		die(_("Unusable instruction sheet: %s"), todo_file);
+}
+
+static void read_populate_rewritten(void)
+{
+	const char *rewritten_file = git_path(SEQ_REWR_FILE);
+	struct strbuf buf = STRBUF_INIT;
+	char *p;
+	int fd;
+
+	fd = open(rewritten_file, O_RDONLY);
+	if (fd < 0)
+		return;
+	if (strbuf_read(&buf, fd, 0) < 0) {
+		close(fd);
+		strbuf_release(&buf);
+		return;
+	}
+	close(fd);
+
+	for (p = buf.buf; *p;) {
+		unsigned char from[20];
+		unsigned char to[20];
+		char *eol = strchrnul(p, '\n');
+		if (eol - p != 81)
+			/* wrong size */
+			break;
+		if (get_sha1_hex(p, from))
+			break;
+		if (get_sha1_hex(p + 41, to))
+			break;
+		add_rewritten(from, to);
+		p = *eol ? eol + 1 : eol;
+	}
+	strbuf_release(&buf);
 }
 
 static int populate_opts_cb(const char *key, const char *value, void *data)
@@ -948,6 +1056,29 @@ static void save_todo(struct commit_list *todo_list, struct replay_opts *opts)
 	strbuf_release(&buf);
 }
 
+static void save_rewritten(void)
+{
+	const char *todo_file = git_path(SEQ_REWR_FILE);
+	static struct lock_file rewritten_lock;
+	struct strbuf buf = STRBUF_INIT;
+	int fd, i;
+
+	fd = hold_lock_file_for_update(&rewritten_lock, todo_file, LOCK_DIE_ON_ERROR);
+	for (i = 0; i < rewritten.nr; i++) {
+		struct rewritten_list_item *item = &rewritten.items[i];
+		strbuf_addf(&buf, "%s %s\n", sha1_to_hex(item->from), sha1_to_hex(item->to));
+	}
+	if (write_in_full(fd, buf.buf, buf.len) < 0) {
+		strbuf_release(&buf);
+		die_errno(_("Could not write to %s"), todo_file);
+	}
+	if (commit_lock_file(&rewritten_lock) < 0) {
+		strbuf_release(&buf);
+		die(_("Error wrapping up %s."), todo_file);
+	}
+	strbuf_release(&buf);
+}
+
 static void save_opts(struct replay_opts *opts)
 {
 	const char *opts_file = git_path(SEQ_OPTS_FILE);
@@ -993,9 +1124,15 @@ static int pick_commits(struct commit_list *todo_list, struct replay_opts *opts)
 	for (cur = todo_list; cur; cur = cur->next) {
 		save_todo(cur, opts);
 		res = do_pick_commit(cur->item, opts);
-		if (res)
+		if (res) {
+			if (opts->action == REPLAY_PICK)
+				save_rewritten();
 			return res;
+		}
 	}
+
+	if (opts->action == REPLAY_PICK)
+		run_rewrite_hook("cherry-pick");
 
 	/*
 	 * Sequence of picks finished successfully; cleanup by
@@ -1023,6 +1160,8 @@ static int sequencer_continue(struct replay_opts *opts)
 		return continue_single_pick();
 	read_populate_opts(&opts);
 	read_populate_todo(&todo_list, opts);
+	if (opts->action == REPLAY_PICK)
+		read_populate_rewritten();
 
 	/* Verify that the conflict has been resolved */
 	if (file_exists(git_path("CHERRY_PICK_HEAD")) ||
@@ -1033,14 +1172,25 @@ static int sequencer_continue(struct replay_opts *opts)
 	}
 	if (index_differs_from("HEAD", 0))
 		return error_dirty_index(opts);
+	if (opts->action == REPLAY_PICK) {
+		unsigned char to[20];
+		if (!read_ref("HEAD", to))
+			add_rewritten(todo_list->item->object.sha1, to);
+	}
 	todo_list = todo_list->next;
 	return pick_commits(todo_list, opts);
 }
 
 static int single_pick(struct commit *cmit, struct replay_opts *opts)
 {
+	int ret;
 	setenv(GIT_REFLOG_ACTION, action_name(opts), 0);
-	return do_pick_commit(cmit, opts);
+	ret = do_pick_commit(cmit, opts);
+	if (ret)
+		return ret;
+	if (opts->action == REPLAY_PICK)
+		run_rewrite_hook("cherry-pick");
+	return 0;
 }
 
 int sequencer_pick_revisions(struct replay_opts *opts)
