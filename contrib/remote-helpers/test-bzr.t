@@ -5,7 +5,8 @@
 
 test_description='Test remote-bzr'
 
-. ./test-lib.sh
+test -z "$TEST_DIRECTORY" && TEST_DIRECTORY="$PWD/../../t"
+. "$TEST_DIRECTORY"/test-lib.sh
 
 if ! test_have_prereq PYTHON; then
 	skip_all='skipping remote-bzr tests; python not available'

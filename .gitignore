@@ -119,11 +119,13 @@
 /git-reflog
 /git-relink
 /git-remote
+/git-remote-bzr
 /git-remote-http
 /git-remote-https
 /git-remote-ftp
 /git-remote-ftps
 /git-remote-fd
+/git-remote-hg
 /git-remote-ext
 /git-remote-testgit
 /git-remote-testpy

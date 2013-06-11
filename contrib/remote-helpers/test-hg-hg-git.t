@@ -8,7 +8,8 @@
 
 test_description='Test remote-hg output compared to hg-git'
 
-. ./test-lib.sh
+test -z "$TEST_DIRECTORY" && TEST_DIRECTORY="$PWD/../../t"
+. "$TEST_DIRECTORY"/test-lib.sh
 
 if ! test_have_prereq PYTHON; then
 	skip_all='skipping remote-hg tests; python not available'
