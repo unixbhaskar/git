@@ -12,9 +12,7 @@ chmod +x helper
 
 test_expect_success 'setup ' '
 	echo "bin: test" >one.bin &&
-	if test_have_prereq SYMLINKS; then
-		ln -s one.bin symlink.bin
-	fi &&
+	test_ln_s_add one.bin symlink.bin &&
 	git add . &&
 	GIT_AUTHOR_NAME=Number1 git commit -a -m First --date="2010-01-01 18:00:00" &&
 	echo "bin: test version 2" >one.bin &&
@@ -68,19 +66,19 @@ test_expect_success 'cat-file --textconv on previous commit' '
 	test_cmp expected result
 '
 
-test_expect_success SYMLINKS 'cat-file without --textconv (symlink)' '
+test_expect_success 'cat-file without --textconv (symlink)' '
 	printf "%s" "one.bin" >expected &&
 	git cat-file blob :symlink.bin >result &&
 	test_cmp expected result
 '
 
 
-test_expect_success SYMLINKS 'cat-file --textconv on index (symlink)' '
+test_expect_success 'cat-file --textconv on index (symlink)' '
 	git cat-file --textconv :symlink.bin >result &&
 	test_cmp expected result
 '
 
-test_expect_success SYMLINKS 'cat-file --textconv on HEAD (symlink)' '
+test_expect_success 'cat-file --textconv on HEAD (symlink)' '
 	git cat-file --textconv HEAD:symlink.bin >result &&
 	test_cmp expected result
 '
