@@ -16,6 +16,10 @@ test_description='--ancestry-path'
 #
 #  F...I                 == F G H I
 #  --ancestry-path F...I == F H I
+#
+#  G..M -- G.t                 == [nothing - was dropped in "-s ours" merge L]
+#  --ancestry-path G..M -- G.t == L
+#  --ancestry-path --simplify-merges G^..M -- G.t == G L
 
 . ./test-lib.sh
 
@@ -89,6 +93,28 @@ test_expect_success 'rev-list --ancestry-path F...I' '
 	test_cmp expect actual
 '
 
+# G.t is dropped in an "-s ours" merge
+test_expect_success 'rev-list G..M -- G.t' '
+	git rev-list --format=%s G..M -- G.t |
+	sed -e "/^commit /d" >actual &&
+	test_must_be_empty actual
+'
+
+test_expect_success 'rev-list --ancestry-path G..M -- G.t' '
+	echo L >expect &&
+	git rev-list --ancestry-path --format=%s G..M -- G.t |
+	sed -e "/^commit /d" >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'rev-list --ancestry-path --simplify-merges G^..M -- G.t' '
+	for c in G L; do echo $c; done >expect &&
+	git rev-list --ancestry-path --simplify-merges --format=%s G^..M -- G.t |
+	sed -e "/^commit /d" |
+	sort >actual &&
+	test_cmp expect actual
+'
+
 #   b---bc
 #  / \ /
 # a   X
@@ -117,14 +143,14 @@ test_expect_success 'setup criss-cross' '
 test_expect_success 'criss-cross: rev-list --ancestry-path cb..bc' '
 	(cd criss-cross &&
 	 git rev-list --ancestry-path xcb..xbc > actual &&
-	 test -z "$(cat actual)")
+	 test_must_be_empty actual)
 '
 
 # no commits in repository descend from cb
 test_expect_success 'criss-cross: rev-list --ancestry-path --all ^cb' '
 	(cd criss-cross &&
 	 git rev-list --ancestry-path --all ^xcb > actual &&
-	 test -z "$(cat actual)")
+	 test_must_be_empty actual)
 '
 
 test_done
