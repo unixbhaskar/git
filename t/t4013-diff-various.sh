@@ -297,6 +297,9 @@ log --root --patch-with-stat --summary master
 log --root -c --patch-with-stat --summary master
 # improved by Timo's patch
 log --root --cc --patch-with-stat --summary master
+log --no-diff-merges -p --first-parent master
+log --diff-merges=off -p --first-parent master
+log --first-parent --diff-merges=off -p master
 log -p --first-parent master
 log -m -p --first-parent master
 log -m -p master
