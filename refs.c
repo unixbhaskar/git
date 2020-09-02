@@ -313,7 +313,7 @@ int read_ref(const char *refname, struct object_id *oid)
 	return read_ref_full(refname, RESOLVE_REF_READING, oid, NULL);
 }
 
-static int refs_ref_exists(struct ref_store *refs, const char *refname)
+int refs_ref_exists(struct ref_store *refs, const char *refname)
 {
 	return !!refs_resolve_ref_unsafe(refs, refname, RESOLVE_REF_READING, NULL, NULL);
 }
@@ -1950,24 +1950,17 @@ int ref_update_reject_duplicates(struct string_list *refnames,
 	return 0;
 }
 
-static const char hook_not_found;
-static const char *hook;
-
 static int run_transaction_hook(struct ref_transaction *transaction,
 				const char *state)
 {
 	struct child_process proc = CHILD_PROCESS_INIT;
 	struct strbuf buf = STRBUF_INIT;
+	const char *hook;
 	int ret = 0, i;
 
-	if (hook == &hook_not_found)
-		return ret;
+	hook = find_hook("reference-transaction");
 	if (!hook)
-		hook = xstrdup_or_null(find_hook("reference-transaction"));
-	if (!hook) {
-		hook = &hook_not_found;
 		return ret;
-	}
 
 	strvec_pushl(&proc.args, hook, state, NULL);
 	proc.in = -1;
