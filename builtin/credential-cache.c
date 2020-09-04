@@ -1,7 +1,10 @@
-#include "cache.h"
+#include "builtin.h"
+#include "parse-options.h"
+
+#ifndef NO_UNIX_SOCKETS
+
 #include "credential.h"
 #include "string-list.h"
-#include "parse-options.h"
 #include "unix-socket.h"
 #include "run-command.h"
 
@@ -39,13 +42,13 @@ static int send_request(const char *socket, const struct strbuf *out)
 static void spawn_daemon(const char *socket)
 {
 	struct child_process daemon = CHILD_PROCESS_INIT;
-	const char *argv[] = { NULL, NULL, NULL };
 	char buf[128];
 	int r;
 
-	argv[0] = "git-credential-cache--daemon";
-	argv[1] = socket;
-	daemon.argv = argv;
+	strvec_pushl(&daemon.args,
+		     "credential-cache--daemon", socket,
+		     NULL);
+	daemon.git_cmd = 1;
 	daemon.no_stdin = 1;
 	daemon.out = -1;
 
@@ -96,7 +99,7 @@ static char *get_socket_path(void)
 	return socket;
 }
 
-int cmd_main(int argc, const char **argv)
+int cmd_credential_cache(int argc, const char **argv, const char *prefix)
 {
 	char *socket_path = NULL;
 	int timeout = 900;
@@ -113,7 +116,7 @@ int cmd_main(int argc, const char **argv)
 		OPT_END()
 	};
 
-	argc = parse_options(argc, argv, NULL, options, usage, 0);
+	argc = parse_options(argc, argv, prefix, options, usage, 0);
 	if (!argc)
 		usage_with_options(usage, options);
 	op = argv[0];
@@ -134,3 +137,21 @@ int cmd_main(int argc, const char **argv)
 
 	return 0;
 }
+
+#else
+
+int cmd_credential_cache(int argc, const char **argv, const char *prefix)
+{
+	const char * const usage[] = {
+		"git credential-cache [options] <action>",
+		"",
+		"credential-cache is disabled in this build of Git",
+		NULL
+	};
+	struct option options[] = { OPT_END() };
+
+	argc = parse_options(argc, argv, prefix, options, usage, 0);
+	die(_("credential-cache unavailable; no unix socket support"));
+}
+
+#endif /* NO_UNIX_SOCKETS */
