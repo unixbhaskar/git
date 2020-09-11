@@ -315,13 +315,14 @@ static void add_pending_object_with_path(struct rev_info *revs,
 					 const char *name, unsigned mode,
 					 const char *path)
 {
+	struct interpret_branch_name_options options = { 0 };
 	if (!obj)
 		return;
 	if (revs->no_walk && (obj->flags & UNINTERESTING))
 		revs->no_walk = 0;
 	if (revs->reflog_info && obj->type == OBJ_COMMIT) {
 		struct strbuf buf = STRBUF_INIT;
-		int len = interpret_branch_name(name, 0, &buf, 0);
+		int len = interpret_branch_name(name, 0, &buf, &options);
 
 		if (0 < len && name[len] && buf.len)
 			strbuf_addstr(&buf, name + len);
@@ -2352,7 +2353,13 @@ static int handle_revision_opt(struct rev_info *revs, int argc, const char **arg
 		revs->diffopt.flags.recursive = 1;
 		revs->diffopt.flags.tree_in_recursive = 1;
 	} else if (!strcmp(arg, "-m")) {
+		/*
+		 * To "diff-index", "-m" means "match missing", and to the "log"
+		 * family of commands, it means "show full diff for merges". Set
+		 * both fields appropriately.
+		 */
 		revs->ignore_merges = 0;
+		revs->match_missing = 1;
 	} else if ((argcount = parse_long_opt("diff-merges", argv, &optarg))) {
 		if (!strcmp(optarg, "off")) {
 			revs->ignore_merges = 1;
