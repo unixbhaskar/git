@@ -1557,9 +1557,7 @@ char *get_head_description(void)
 		strbuf_addstr(&desc, _("no branch"));
 	strbuf_addch(&desc, ')');
 
-	free(state.branch);
-	free(state.onto);
-	free(state.detached_from);
+	wt_status_state_free_buffers(&state);
 	return strbuf_detach(&desc, NULL);
 }
 
@@ -2239,11 +2237,13 @@ static void reach_filter(struct ref_array *array,
 {
 	struct rev_info revs;
 	int i, old_nr;
-	struct commit **to_clear = xcalloc(sizeof(struct commit *), array->nr);
+	struct commit **to_clear;
 	struct commit_list *cr;
 
 	if (!check_reachable)
 		return;
+
+	to_clear = xcalloc(sizeof(struct commit *), array->nr);
 
 	repo_init_revisions(the_repository, &revs, NULL);
 

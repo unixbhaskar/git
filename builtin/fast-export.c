@@ -405,12 +405,12 @@ static char *generate_fake_oid(void *data)
 {
 	static uint32_t counter = 1; /* avoid null oid */
 	const unsigned hashsz = the_hash_algo->rawsz;
-	unsigned char out[GIT_MAX_RAWSZ];
+	struct object_id oid;
 	char *hex = xmallocz(GIT_MAX_HEXSZ);
 
-	hashclr(out);
-	put_be32(out + hashsz - 4, counter++);
-	return hash_to_hex_algop_r(hex, out, the_hash_algo);
+	oidclr(&oid);
+	put_be32(oid.hash + hashsz - 4, counter++);
+	return oid_to_hex_r(hex, &oid);
 }
 
 static const char *anonymize_oid(const char *oid_hex)
@@ -1026,7 +1026,7 @@ static void handle_tags_and_duplicates(struct string_list *extras)
 				/*
 				 * Getting here means we have a commit which
 				 * was excluded by a negative refspec (e.g.
-				 * fast-export ^master master).  If we are
+				 * fast-export ^HEAD HEAD).  If we are
 				 * referencing excluded commits, set the ref
 				 * to the exact commit.  Otherwise, the user
 				 * wants the branch exported but every commit
